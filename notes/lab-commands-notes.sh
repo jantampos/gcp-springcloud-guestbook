@@ -331,3 +331,101 @@ gcloud pubsub subscriptions pull messages-subscription-1
 gcloud pubsub subscriptions pull messages-subscription-1
 
 gcloud pubsub subscriptions pull messages-subscription-1 --auto-ack
+
+# Process messages in subscriptions
+
+cd ~
+curl https://start.spring.io/starter.tgz \
+  -d dependencies=cloud-gcp-pubsub \
+  -d baseDir=message-processor | tar -xzvf -
+
+...
+     <dependencies>
+          <dependency>
+               <groupId>org.springframework.cloud</groupId>
+               <artifactId>spring-cloud-gcp-starter-pubsub</artifactId>
+          </dependency>
+          <dependency>
+               <groupId>org.springframework.boot</groupId>
+               <artifactId>spring-boot-starter-test</artifactId>
+               <scope>test</scope>
+          </dependency>
+     </dependencies>
+...
+
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.cloud.gcp.pubsub.core.*;
+
+@Bean
+public CommandLineRunner cli(PubSubTemplate pubSubTemplate) {
+    return (args) -> {
+        pubSubTemplate.subscribe("messages-subscription-1",
+            (msg, ackConsumer) -> {
+                System.out.println(msg.getData().toStringUtf8());
+                ackConsumer.ack();
+            });
+    };
+}
+
+
+cd ~/message-processor
+./mvnw -q spring-boot:run
+
+## JAVAMS06 Integrating Cloud Pub/Sub with Spring
+
+# Add the Spring Integration core
+
+<dependency>
+    <groupId>org.springframework.integration</groupId>
+    <artifactId>spring-integration-core</artifactId>
+</dependency>
+
+# Create an outbound message gateway
+...
+  package com.example.frontend;
+
+  import org.springframework.integration.annotation.MessagingGateway;
+
+  @MessagingGateway(defaultRequestChannel = "messagesOutputChannel")
+  public interface OutboundGateway {
+    void publishMessage(String message);
+  }
+...
+
+# Publish the message
+
+@Autowired
+private PubSubTemplate pubSubTemplate;
+
+@Autowired
+private OutboundGateway outboundGateway;
+
+pubSubTemplate.publish("messages", name + ": " + message);
+
+outboundGateway.publishMessage(name + ": " + message);
+
+# Bind the output channel to the Cloud Pub/Sub topic
+
+# configure a service activator to bind messagesOutputChannel to use Cloud Pub/Sub.
+...
+  import org.springframework.context.annotation.*;
+  import org.springframework.cloud.gcp.pubsub.core.*;
+  import org.springframework.cloud.gcp.pubsub.integration.outbound.*;
+  import org.springframework.integration.annotation.*;
+  import org.springframework.messaging.*;
+
+  @Bean
+  @ServiceActivator(inputChannel = "messagesOutputChannel")
+  public MessageHandler messageSender(PubSubTemplate pubsubTemplate) {
+    return new PubSubMessageHandler(pubsubTemplate, "messages");
+  }
+...
+
+# Test the application in the Cloud Shell
+
+./mvnw spring-boot:run -Dspring.profiles.active=cloud
+
+gcloud pubsub subscriptions pull messages-subscription-1 --auto-ack
+
