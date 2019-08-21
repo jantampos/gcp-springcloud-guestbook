@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.*;
 import java.util.*;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.cloud.gcp.pubsub.core.*;
+
 
 @RefreshScope
 @Controller
@@ -17,6 +19,9 @@ public class FrontendController {
 	
 	@Value("${greeting:Hello}")
 	private String greeting;
+
+	@Autowired
+    private PubSubTemplate pubSubTemplate;
 	
 	@GetMapping("/")
 	public String index(Model model) {
@@ -32,6 +37,8 @@ public class FrontendController {
 	public String post(@RequestParam String name, @RequestParam String message, Model model) {
 		model.addAttribute("name", name);
 		if (message != null && !message.trim().isEmpty()) {
+			// Publish to pubsub 
+			pubSubTemplate.publish("messages", name + ": " + message);
 			// Post the message to the backend service
 			Map<String, String> payload = new HashMap<>();
 			payload.put("name", name);

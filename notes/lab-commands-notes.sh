@@ -293,3 +293,41 @@ gcloud iam service-accounts keys create \
 
 # JAVAMS05 Messaging with Cloud Pub/Sub
 
+# Enable Cloud Pub/Sub API
+
+gcloud services enable pubsub.googleapis.com
+
+# Create a Cloud Pub/Sub topic
+
+gcloud pubsub topics create messages
+
+# Add Spring Cloud GCP Pub/Sub starter FE
+
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-gcp-starter-pubsub</artifactId>
+</dependency>
+
+# Publish a message
+
+import org.springframework.cloud.gcp.pubsub.core.*;
+
+@Autowired
+private PubSubTemplate pubSubTemplate;
+
+pubSubTemplate.publish("messages", name + ": " + message);
+
+
+# Run
+./mvnw -q spring-boot:run -Dserver.port=8081 -Dspring.profiles.active=cloud
+
+# Create a subscription
+
+gcloud pubsub subscriptions create messages-subscription-1 \
+  --topic=messages
+
+gcloud pubsub subscriptions pull messages-subscription-1
+
+gcloud pubsub subscriptions pull messages-subscription-1
+
+gcloud pubsub subscriptions pull messages-subscription-1 --auto-ack
