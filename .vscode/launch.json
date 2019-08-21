@@ -1,0 +1,11 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - GuestbookFrontendApplication",
+            "request": "launch",
+            "mainClass": "gcp.jan.guestbook.frontend.GuestbookFrontendApplication",
+            "projectName": "frontend"
+        }
+    ]
+}
