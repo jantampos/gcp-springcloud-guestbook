@@ -242,4 +242,54 @@ curl http://localhost:8080/actuator/configprops | jq
 
 ## JAVAMS04 Working with Stackdriver Trace
 
+# Enable Stackdriver Trace API
+
+gcloud services enable cloudtrace.googleapis.com
+
+# Add the Spring Cloud GCP Trace starter
+
+# Backend
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-gcp-starter-trace</artifactId>
+</dependency>
+
+# Frontend
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-gcp-starter-trace</artifactId>
+</dependency>
+
+# Disable trace for testing purposes
+spring.cloud.gcp.trace.enabled=false
+
+# Enable trace sampling for the cloud profile for the backend and fe (put in application.properties)
+spring.cloud.gcp.trace.enabled=true
+spring.sleuth.sampler.probability=1
+spring.sleuth.web.skipPattern=(^cleanup.*|.+favicon.*)
+
+# Set up a service account
+
+gcloud iam service-accounts create guestbook
+
+export PROJECT_ID=$(gcloud config list --format 'value(core.project)')
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member serviceAccount:guestbook@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role roles/editor
+
+gcloud iam service-accounts keys create \
+  ~/service-account.json \
+  --iam-account guestbook@${PROJECT_ID}.iam.gserviceaccount.com
+
+# Run the app with service account
+
+# BE
+./mvnw spring-boot:run -Dserver.port=8081 -Dspring.profiles.active=cloud \
+  -Dspring.cloud.gcp.credentials.location=file:///$HOME/service-account.json
+
+# FE
+./mvnw spring-boot:run -Dspring.profiles.active=cloud \
+  -Dspring.cloud.gcp.credentials.location=file:///$HOME/service-account.json
+
+# JAVAMS05 Messaging with Cloud Pub/Sub
 
