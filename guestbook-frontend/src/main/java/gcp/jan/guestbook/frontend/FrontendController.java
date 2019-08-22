@@ -6,6 +6,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.*;
 import java.util.*;
+
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 // import org.springframework.cloud.gcp.pubsub.core.*;
 
@@ -18,6 +19,10 @@ import org.springframework.util.StreamUtils;
 import java.io.*;
 
 import org.springframework.http.*;
+
+import com.google.cloud.vision.v1.*;
+
+
 
 @RefreshScope
 @Controller
@@ -41,6 +46,9 @@ public class FrontendController {
 	// Get the Project ID, as its Cloud Storage bucket name here
 	@Autowired
 	private GcpProjectIdProvider projectIdProvider;
+
+	@Autowired
+	private ImageAnnotatorClient annotatorClient;
 
 	@GetMapping("/")
 	public String index(Model model) {
@@ -70,6 +78,8 @@ public class FrontendController {
 			try (OutputStream os = resource.getOutputStream()) {
 				os.write(file.getBytes());
 			}
+			// After written to GCS, analyze the image.
+            analyzeImage(bucket + "/" + filename);
 		}
 
 		if (message != null && !message.trim().isEmpty()) {
@@ -100,4 +110,26 @@ public class FrontendController {
 		headers.setContentType(MediaType.IMAGE_JPEG);
 		return new ResponseEntity<>(image, headers, HttpStatus.OK);
 	}
+
+	private void analyzeImage(String uri) {
+		/**
+		 * After the image was written to GCS, analyze it with the GCS URI.
+		 * It's also possible to analyze an image embedded in the request as a Base64 encoded payload.
+		 */
+		List<AnnotateImageRequest> requests = new ArrayList<>();
+		ImageSource imgSrc = ImageSource.newBuilder()
+								.setGcsImageUri(uri)
+								.build();
+		Image img = Image.newBuilder().setSource(imgSrc).build();
+		Feature feature = Feature.newBuilder().setType(Feature.Type.LABEL_DETECTION).build();
+		AnnotateImageRequest request = AnnotateImageRequest.newBuilder().addFeatures(feature).setImage(img).build();
+		requests.add(request);
+		BatchAnnotateImagesResponse responses = annotatorClient.batchAnnotateImages(requests);
+		/** We send in one image, expecting just one response in batch */
+		AnnotateImageResponse response = responses.getResponses(0);
+		System.out.println(response);
+
+	}
+
+
 }

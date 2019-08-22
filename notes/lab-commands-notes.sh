@@ -489,3 +489,86 @@ gcloud pubsub subscriptions pull messages-subscription-1 --auto-ack
   }
 ...
 
+## JAVAMS08 Using Cloud Platform APIs
+
+# Enable Vision API
+
+gcloud services enable vision.googleapis.com
+
+# Add the Vision client library
+
+<dependency>
+  <groupId>com.google.cloud</groupId>
+  <artifactId>google-cloud-vision</artifactId>
+</dependency>
+
+# Add a GCP credential scope for Spring
+
+# /application.properties
+spring.cloud.gcp.credentials.scopes=https://www.googleapis.com/auth/cloud-platform
+
+
+# Create a Vision API client bean
+...
+import java.io.IOException;
+import com.google.cloud.vision.v1.*;
+import com.google.api.gax.core.CredentialsProvider;
+
+// This configures the Vision API settings with a
+// credential using the the scope we specified in
+// the application.properties.
+@Bean
+public ImageAnnotatorSettings imageAnnotatorSettings(
+            CredentialsProvider credentialsProvider)
+            throws IOException {
+            return ImageAnnotatorSettings.newBuilder()
+            .setCredentialsProvider(credentialsProvider).build();
+}
+
+@Bean
+public ImageAnnotatorClient imageAnnotatorClient(
+            ImageAnnotatorSettings settings)
+            throws IOException {
+        return ImageAnnotatorClient.create(settings);
+}
+...
+
+# Analyze the image
+...
+import com.google.cloud.vision.v1.*;
+
+
+@Autowired
+private ImageAnnotatorClient annotatorClient;
+
+private void analyzeImage(String uri) {
+    # // After the image was written to GCS,
+    # // analyze it with the GCS URI.It's also
+    # // possible to analyze an image embedded in
+    # // the request as a Base64 encoded payload.
+    List<AnnotateImageRequest> requests = new ArrayList<>();
+    ImageSource imgSrc = ImageSource.newBuilder()
+          .setGcsImageUri(uri).build();
+    Image img = Image.newBuilder().setSource(imgSrc).build();
+    Feature feature = Feature.newBuilder()
+          .setType(Feature.Type.LABEL_DETECTION).build();
+    AnnotateImageRequest request = AnnotateImageRequest
+          .newBuilder()
+          .addFeatures(feature)
+          .setImage(img)
+          .build();
+    requests.add(request);
+    BatchAnnotateImagesResponse responses =
+          annotatorClient.batchAnnotateImages(requests);
+      #  // We send in one image, expecting just
+      #  // one response in batch
+    AnnotateImageResponse response =responses.getResponses(0);
+    System.out.println(response);
+}
+
+// After written to GCS, analyze the image.
+analyzeImage(bucket + "/" + filename);
+...
+
+
+
