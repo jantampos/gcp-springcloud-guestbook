@@ -5,7 +5,8 @@
             "name": "CodeLens (Launch) - GuestbookFrontendApplication",
             "request": "launch",
             "mainClass": "gcp.jan.guestbook.frontend.GuestbookFrontendApplication",
-            "projectName": "frontend"
+            "projectName": "frontend",
+            "env": { "GOOGLE_APPLICATION_CREDENTIALS": "/Users/jan.tampos/Trainings/Spring/Building Scalable Java Microservices with Spring Boot and Spring Cloud/gcp-springcloud-guestbook/adc.json" }
         }
     ]
 }

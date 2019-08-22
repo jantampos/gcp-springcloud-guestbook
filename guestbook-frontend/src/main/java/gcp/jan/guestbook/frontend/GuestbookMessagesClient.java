@@ -12,10 +12,10 @@ import java.util.Map;
 public interface GuestbookMessagesClient {
 
 	@RequestMapping(method=RequestMethod.GET, path="/")
-	Resources<GuestbookMessage> getMessages();
+	Resources<Map> getMessages();
 	
 	@RequestMapping(method=RequestMethod.GET, path="/{id}")
-	GuestbookMessage getMessage(@PathVariable("id") long messageId);
+	Map getMessage(@PathVariable("id") long messageId);
 	
 	@RequestMapping(method=RequestMethod.POST, path="/")
 	Resource<Map> add(@RequestBody Map message);
