@@ -22,11 +22,9 @@ import org.springframework.http.*;
 
 import com.google.cloud.vision.v1.*;
 
-
-
 @RefreshScope
+// @SessionAttributes("name")
 @Controller
-@SessionAttributes("name")
 public class FrontendController {
 	@Autowired
 	private GuestbookMessagesClient client;
@@ -97,6 +95,7 @@ public class FrontendController {
 		}
 		
 		return "redirect:/";
+
 	}
 
 	// ".+" is necessary to capture URI with filename extension
