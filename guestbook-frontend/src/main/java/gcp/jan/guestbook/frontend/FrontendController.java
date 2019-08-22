@@ -95,6 +95,7 @@ public class FrontendController {
 			outboundGateway.publishMessage(name + ": " + message);
 
 		}
+		
 		return "redirect:/";
 	}
 

@@ -570,5 +570,43 @@ private void analyzeImage(String uri) {
 analyzeImage(bucket + "/" + filename);
 ...
 
+## JAVAMS09 Deploying to App Engine
 
+# Initialize App Engine
+
+gcloud app create --region=us-central
+
+# Make the guestbook frontend App Engine friendly
+
+... 
+#pom.xml
+<plugin>
+  <groupId>com.google.cloud.tools</groupId>
+  <artifactId>appengine-maven-plugin</artifactId>
+  <version>1.3.1</version>
+  <configuration>
+        <version>1</version>
+  </configuration>
+</plugin>
+
+#mkdir -p ~/guestbook-frontend/src/main/webapp/WEB-INF/
+<appengine-web-app xmlns="http://appengine.google.com/ns/1.0">
+  <service>default</service>
+  <version>1</version>
+  <threadsafe>true</threadsafe>
+  <runtime>java8</runtime>
+  <instance-class>B4_1G</instance-class>
+  <sessions-enabled>true</sessions-enabled>
+  <manual-scaling>
+    <instances>2</instances>
+  </manual-scaling>
+  <system-properties>
+    <property name="spring.profiles.active" value="cloud" />
+  </system-properties>
+</appengine-web-app>
+...
+
+gcloud beta runtime-config configs variables set messages.endpoint \
+  "https://guestbook-service-dot-${PROJECT_ID}.appspot.com/guestbookMessages" \
+  --config-name frontend_cloud
 
