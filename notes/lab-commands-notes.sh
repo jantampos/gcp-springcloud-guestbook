@@ -577,7 +577,6 @@ analyzeImage(bucket + "/" + filename);
 gcloud app create --region=us-central
 
 # Make the guestbook frontend App Engine friendly
-
 ... 
 #pom.xml
 <plugin>
@@ -609,4 +608,256 @@ gcloud app create --region=us-central
 gcloud beta runtime-config configs variables set messages.endpoint \
   "https://guestbook-service-dot-${PROJECT_ID}.appspot.com/guestbookMessages" \
   --config-name frontend_cloud
+
+#  Make the backend service application App Engine friendly
+...
+# pom.xml
+<plugin>
+  <groupId>com.google.cloud.tools</groupId>
+  <artifactId>appengine-maven-plugin</artifactId>
+  <version>1.3.1</version>
+  <configuration>
+        <version>1</version>
+  </configuration>
+</plugin>
+# mkdir -p ~/guestbook-service/src/main/webapp/WEB-INF/
+<appengine-web-app xmlns="http://appengine.google.com/ns/1.0">
+  <service>guestbook-service</service>
+  <version>1</version>
+  <threadsafe>true</threadsafe>
+  <runtime>java8</runtime>
+  <instance-class>B4_1G</instance-class>
+  <manual-scaling>
+    <instances>2</instances>
+  </manual-scaling>
+  <system-properties>
+    <property name="spring.profiles.active" value="cloud" />
+  </system-properties>
+</appengine-web-app>
+
+# Deploy
+./mvnw appengine:deploy -DskipTests
+./mvnw package appengine:deploy -DskipTests
+
+## JAVAMS10 Debugging with Stackdriver Debugge
+
+# Upload a source code capture to Google server
+gcloud services enable sourcerepo.googleapis.com
+
+gcloud source repos create google-source-captures
+
+git config --global user.email $(gcloud config get-value core/account)
+git config --global user.name "devstar"
+
+gcloud beta debug source upload --project=$PROJECT_ID \
+ --branch=[CAPTURE_BRANCH_ID] ./src/
+
+## JAVAMS11 Working with Cloud Spanner
+
+# Enable Cloud Spanner API
+gcloud services enable spanner.googleapis.com
+
+# Create and provision a Cloud Spanner instance
+gcloud spanner instances create guestbook --config=regional-us-central1 \
+  --nodes=1 --description="Guestbook messages"
+
+gcloud spanner databases create messages --instance=guestbook
+
+gcloud spanner databases list --instance=guestbook
+
+cd ~/guestbook-service
+mkdir db
+
+# spanner.ddl
+CREATE TABLE guestbook_message (
+    id STRING(36) NOT NULL,
+    name STRING(255) NOT NULL,
+    image_uri STRING(255),
+    message STRING(255)
+) PRIMARY KEY (id);
+
+gcloud spanner databases ddl update messages \
+  --instance=guestbook --ddl="$(<db/spanner.ddl)"
+
+# Add the Spring Cloud GCP Cloud Spanner starter
+
+<dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-gcp-starter-data-spanner</artifactId>
+</dependency>
+
+# Configure the cloud profile to use Cloud Spanner
+
+spring.cloud.gcp.sql.enabled=true
+spring.cloud.gcp.sql.database-name=messages
+spring.cloud.gcp.sql.instance-connection-name=...
+
+spring.cloud.gcp.spanner.instance-id=guestbook
+spring.cloud.gcp.spanner.database=messages
+
+# Update the backend service to use Cloud Spanner
+
+package com.example.guestbook;
+
+import lombok.*;
+import org.springframework.cloud.gcp.data.spanner.core.mapping.*;
+import org.springframework.data.annotation.Id;
+
+@Data
+@Table(name = "guestbook_message")
+public class GuestbookMessage {
+  @PrimaryKey
+  @Id
+  private String id;
+
+  private String name;
+
+  private String message;
+
+  @Column(name = "image_uri")
+  private String imageUri;
+
+  public GuestbookMessage() {
+          this.id = java.util.UUID.randomUUID().toString();
+  }
+}
+
+# Add a method to find messages by name
+...
+import java.util.List;
+public interface GuestbookMessageRepository extends
+        PagingAndSortingRepository<GuestbookMessage, String> {
+  
+  List<GuestbookMessage> findByName(String name);
+}
+...
+
+# Run and test
+curl -XPOST -H "content-type: application/json" \
+  -d '{"name": "Ray", "message": "Hello Cloud Spanner"}' \
+  http://localhost:8081/guestbookMessages
+
+curl http://localhost:8081/guestbookMessages/search/findByName?name=Ray
+
+
+gcloud spanner databases execute-sql messages --instance=guestbook \
+    --sql="SELECT * FROM guestbook_message WHERE name = 'Ray'"
+
+
+## JAVAMS12 Deploying to Kubernetes Engine
+
+# Create a Kubernetes Engine cluster
+
+gcloud services enable container.googleapis.com
+
+gcloud container clusters create guestbook-cluster \
+  --zone=us-central1-a \
+  --num-nodes=2 \
+  --machine-type=n1-standard-2 \
+  --enable-autorepair \
+  --enable-cloud-monitoring \
+  --enable-cloud-logging
+
+# Containerize the applications
+
+gcloud services enable containerregistry.googleapis.com
+
+gcloud config list --format 'value(core.project)'
+
+<plugin>
+  <groupId>com.google.cloud.tools</groupId>
+  <artifactId>jib-maven-plugin</artifactId>
+  <version>0.9.6</version>
+  <configuration>
+          <to>
+      <image>gcr.io/[PROJECT_ID]/guestbook-frontend</image>
+    </to>
+  </configuration>
+</plugin>
+
+./mvnw clean compile jib:build
+
+# generate a service account 
+
+gcloud iam service-accounts create guestbook
+
+export PROJECT_ID=$(gcloud config list --format 'value(core.project)')
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member serviceAccount:guestbook@${PROJECT_ID}.iam.gserviceaccount.com \
+  --role roles/editor
+
+gcloud iam service-accounts keys create \
+  ~/service-account.json \
+  --iam-account guestbook@${PROJECT_ID}.iam.gserviceaccount.com
+
+# set service-account.json a k8s secret
+
+kubectl create secret generic guestbook-service-account \
+  --from-file=$HOME/service-account.json
+
+kubectl describe secret guestbook-service-account
+
+# Deploy the containers
+kubectl apply -f ~/kubernetes/
+
+kubectl get svc guestbook-frontend
+
+kubectl get svc
+
+## JAVAMS13 Working with Kubernetes Monitoring
+
+
+# Enable Stackdriver Monitoring and view the Stackdriver Kubernetes Monitoring dashboard
+
+# Enable Prometheus Monitoring
+
+gcloud container clusters get-credentials guestbook-cluster \
+ --zone=us-central1-a
+
+# Install role-based access control for the Prometheus agent.
+kubectl apply -f \
+https://storage.googleapis.com/stackdriver-prometheus-documentation/rbac-setup.yml \
+  --as=admin --as-group=system:masters
+
+# Install the Prometheus agent.
+export PROJECT_ID=$(gcloud config list --format 'value(core.project)')
+curl -s \
+https://storage.googleapis.com/stackdriver-prometheus-documentation/prometheus-service.yml | \
+  sed -e "s/\(\s*_kubernetes_cluster_name:*\).*/\1 'guestbook-cluster'/g" | \
+  sed -e "s/\(\s*_kubernetes_location:*\).*/\1 'us-central1'/g" | \
+  sed -e "s/\(\s*_stackdriver_project_id:*\).*/\1 '${PROJECT_ID}'/g" | \
+  kubectl apply -f -
+
+# Verify that the Prometheus agent is running.
+kubectl get pods -n stackdriver
+
+# Expose Prometheus metrics from Spring Boot applications
+
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+<dependency>
+  <groupId>io.micrometer</groupId>
+  <artifactId>micrometer-registry-prometheus</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+# application.properties
+management.server.port=8081
+management.endpoints.web.exposure.include=*
+
+# Rebuild the containers
+
+./mvnw clean compile jib:build
+
+# You add Prometheus annotations to the deployment.spec.template.metadata.annotation section of the build YAML file for the frontend application.
+ annotations:
+  prometheus.io/scrape: 'true'
+  prometheus.io/path: '/actuator/prometheus'
+  prometheus.io/port: '8081'
+
+# build
+
+./mvnw clean compile jib:build
 
